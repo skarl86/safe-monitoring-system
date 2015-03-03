@@ -56,7 +56,7 @@ class FeatureExtractor(sc: SparkContext) {
 
       case "tfidf" =>
         keywordCountTfidf =
-          keywordCount.join(reduceKeyword).sortBy(_._2._1, desending)
+          keywordCount.join(reduceKeyword).sortBy(_._2._2, desending)
     }
 
     keywordCountTfidf
