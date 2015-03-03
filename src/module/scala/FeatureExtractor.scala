@@ -32,12 +32,12 @@ class FeatureExtractor(sc: SparkContext) {
     val keywordCount: RDD[(String, Int)] = corpus.flatMap(_.map((_, 1))).reduceByKey(_ + _)
 
     // IDF
-    val keywordIdf = corpus.flatMap(seq => seq.map(str => (str, idf.idf(hashingTF.indexOf(str)))))
-
-    val keywordIdf2 =
-      keywordIdf.mapValues((_, 1))
-      .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
-      .mapValues(x => x._1 / x._2)
+//    val keywordIdf = corpus.flatMap(seq => seq.map(str => (str, idf.idf(hashingTF.indexOf(str)))))
+//
+//    val keywordIdf2 =
+//      keywordIdf.mapValues((_, 1))
+//      .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
+//      .mapValues(x => x._1 / x._2)
 
     // 2. 각 키워드별 TF-IDF 매칭 작업.
     val keywordIndex = corpus.map(seq => seq.map(str => (str, hashingTF.indexOf(str))))
@@ -56,18 +56,18 @@ class FeatureExtractor(sc: SparkContext) {
     }
 
     // 4. Sort 방법, asending / descending
-//    var keywordCountTfidf: RDD[(String, (Int, Double))] = null
+    var keywordCountTfidf: RDD[(String, (Int, Double))] = null
 
-    val keywordCountTfidf = keywordCount.join(reduceKeyword).join(keywordIdf2).sortBy(_._2._2, desending)
-//    sort match  {
-//      case "count" =>
-//        keywordCountTfidf =
-//          keywordCount.join(reduceKeyword).sortBy(_._2._1, desending)
-//
-//      case "tfidf" =>
-//        keywordCountTfidf =
-//          keywordCount.join(reduceKeyword).sortBy(_._2._2, desending)
-//    }
+//    val keywordCountTfidf = keywordCount.join(reduceKeyword).join(keywordIdf2).sortBy(_._2._2, desending)
+    sort match  {
+      case "count" =>
+        keywordCountTfidf =
+          keywordCount.join(reduceKeyword).sortBy(_._2._1, desending)
+
+      case "tfidf" =>
+        keywordCountTfidf =
+          keywordCount.join(reduceKeyword).sortBy(_._2._2, desending)
+    }
 
     keywordCountTfidf
 
