@@ -16,18 +16,18 @@ object Application {
 
 //    morpho.makeKeywordInTweet("input/data.txt", "input/keyword.txt")
 
-    val corpus: RDD[Seq[String]] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => list(1).split(" ").toSeq)
-//    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
+//    val corpus: RDD[Seq[String]] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => list(1).split(" ").toSeq)
+    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
     val keywords: RDD[String] = sc.textFile("input/keyword.txt").map(_.split(",").toSeq).flatMap(_.tail).distinct
 
 //    corpus.foreach(println)
 
-    val keywordTfidf = featureExtractor.tfidf(corpus)
-    keywordTfidf.coalesce(1).saveAsTextFile("output")
+//    val keywordTfidf = featureExtractor.tfidf(corpus)
+//    keywordTfidf.coalesce(1).saveAsTextFile("output")
 
 //    corpus.filter(_._2.contains("설정")).foreach(println)
 
-//    val entropy = featureExtractor.entropy(corpus, keywords)
-//    entropy.saveAsTextFile("output")
+    val entropy = featureExtractor.entropy(corpus, keywords)
+    entropy.saveAsTextFile("output")
   }
 }
