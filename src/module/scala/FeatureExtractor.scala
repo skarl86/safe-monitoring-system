@@ -13,7 +13,8 @@ import org.apache.spark.rdd.RDD
  * To-do Lists
  * 1.
  */
-object FeatureExtractor {
+
+class FeatureExtractor(sc: SparkContext) {
 
   def tfidf(corpus: RDD[Seq[String]],
             method: String = "average",
@@ -62,18 +63,22 @@ object FeatureExtractor {
 
   }
 
-  def entropy(sc: SparkContext,
-              classCorpus: RDD[(String, Seq[String])],
-              keywords: RDD[String]): RDD[(String, Double)] = {
+  def entropy(classCorpus: RDD[(String, String)],
+              keywords: RDD[String]) = {
 
     val COLLECTION_VALUE = 0.0000000000000001
     val TWEET_TOTAL_COUNT = classCorpus.count()
 
     var keywordInfo = List(("start", (.0, .0, .0), (.0, .0, .0)))
 
+    val yesTweetCount = classCorpus.filter(x => x._1.equals("p")).count() + COLLECTION_VALUE
+    val noTweetCount = classCorpus.filter(x => x._1.equals("n")).count() + COLLECTION_VALUE
+    val totalTweetCount = yesTweetCount + noTweetCount
+
     for (keyword <- keywords) {
+
       val yesFilteredTweet = classCorpus.filter(_._2.contains(keyword))
-      val noFilteredTweet =classCorpus.filter(!_._2.contains(keyword))
+      val noFilteredTweet =classCorpus.filter(t => !(t._2.contains(keyword)))
 
       val yesTotalCount = yesFilteredTweet.count()
       val noTotalCount = TWEET_TOTAL_COUNT - yesTotalCount
@@ -103,8 +108,10 @@ object FeatureExtractor {
 
     val final_data = keywordInfo.map(line => line match {
       case (key, (yt, yy, yn), (nt, nn, ny)) => {
-        val entropy = (yt / TWEET_TOTAL_COUNT) * ( ( (-yy / yt) * log2(yy / yt)) + ( (-yn / yt) * log2(yn / yt) ) ) +
-          (nt / TWEET_TOTAL_COUNT) * ( ( (-nn / nt) * log2(nn / nt)) + ( (-ny / nt) * log2(ny / nt) ) )
+        val entropy = ( (-yesTweetCount / totalTweetCount) * log2(yesTweetCount / totalTweetCount) +
+          (-noTweetCount / totalTweetCount) * log2(noTweetCount / totalTweetCount) ) -
+          ( (yt / TWEET_TOTAL_COUNT) * ( ( (-yy / yt) * log2(yy / yt)) + ( (-yn / yt) * log2(yn / yt) ) ) +
+            (nt / TWEET_TOTAL_COUNT) * ( ( (-nn / nt) * log2(nn / nt)) + ( (-ny / nt) * log2(ny / nt) ) ) )
         (key, entropy)
       }
     }).sortBy(x => x._2)
