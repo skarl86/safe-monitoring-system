@@ -1,5 +1,6 @@
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.log4j.{Logger, Level}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkContext, SparkConf}
 
 
 /**
@@ -7,25 +8,25 @@ import org.apache.spark.rdd.RDD
  */
 object Application {
   def main(args: Array[String]) {
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("akka").setLevel(Level.WARN)
 
-    val conf = new SparkConf().setAppName("Safe Monitoring System").setMaster("local[*]")
+    val conf = new SparkConf().setAppName("Safe-Monitoring-System").setMaster("local[*]")
     val sc = new SparkContext(conf)
-
+//
     val morpho = new MorphoAnalysis(conf, sc)
-    val featureExtractor = new FeatureExtractor(sc)
-
-    morpho.makeRDDKeywordInTweet("./input/Baseball.txt","./input/keyword.txt")
-
-//    morpho.makeKeywordInTweet("input/data.txt", "input/keyword.txt")
-
-    val corpus: RDD[Seq[String]] = sc.textFile("input/keyword.txt").map(_.split(",").toSeq)
-//    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
-//    val keywords: RDD[String] = sc.textFile("input/keyword.txt").map(_.split(",").toSeq).flatMap(_.tail).distinct
-
-//    corpus.foreach(println)
-
-    val keywordTfidf = featureExtractor.tfidf(corpus,"average","tfidf",false)
-    keywordTfidf.coalesce(1).saveAsTextFile("output_spark")
+//    val featureExtractor = new FeatureExtractor(sc)
+//
+    morpho.makeRDDKeywordInTweet("./input/data_5000.txt","./output/keyword.txt")
+//    morpho.getStopWordFromDB
+//    val corpus: RDD[Seq[String]] = sc.textFile("output/keyword.txt").map(_.split(",").toSeq)
+////    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
+////    val keywords: RDD[String] = sc.textFile("input/keyword.txt").map(_.split(",").toSeq).flatMap(_.tail).distinct
+//
+////    corpus.foreach(println)
+//
+//    val keywordTfidf = featureExtractor.tfidf(corpus,"average","tfidf",false)
+//    keywordTfidf.coalesce(1).saveAsTextFile("output_spark")
 
 //    corpus.filter(_._2.contains("설정")).foreach(println)
 

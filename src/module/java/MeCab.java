@@ -7,10 +7,13 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
+import java.sql.*;
+
 
 // MECAB SDK
 import org.chasen.mecab.Node;
 import org.chasen.mecab.Tagger;
+import scala.util.parsing.combinator.testing.Str;
 
 public class MeCab {
     static{
@@ -19,30 +22,16 @@ public class MeCab {
 
     private String _wordClass = "(.*NNG.*|.*NNP.*|.*NNB.*|.*NR.*|.*NP.*|.*SL.*)";//|.*SN.*)";// |.*VV.*|.*VA.*|.*MAG.*|.*XR.*)";
     private Tagger _tagger = new Tagger("-d /usr/local/lib/mecab/dic/mecab-ko-dic");
-    private ArrayList<String> _stopWords = new ArrayList<String>();
-
-    public MeCab(){
-        // 불용사전 읽어오기.
-        BufferedReader br = null;
-        String stopword = null;
-
-        try {
-            br = new BufferedReader(new FileReader("./dic/stopword.txt"));
-            stopword = br.readLine();
-            for(String word : stopword.split(",")) {
-                _stopWords.add(word);
-            }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-    }
+    private List<String> _stopwordList = null;
 
     List<String> parseWord(String rowLine) {
         // TODO Auto-generated method stub
 
         List<String> wordList = new ArrayList<String>();
+
+        if(_stopwordList == null) {
+            _stopwordList = getStopWord();
+        }
 
         // 형태소 분석 결과.
         String temp = _tagger.parse(rowLine);
@@ -61,12 +50,47 @@ public class MeCab {
                 feature = line.split("\t")[1].split(",")[0];
                 if(feature.matches(_wordClass)){
                     // 불용어 처리.
-                    if(!_stopWords.contains(key))
+                    if(!_stopwordList.contains(key))
                         wordList.add(key);
                 }
             }
         }
 
         return wordList;
+    }
+    List<String> getStopWord(){
+        ArrayList<String> words = new ArrayList<String >();
+        try
+        {
+            // create our mysql database connection
+            String myDriver = "org.gjt.mm.mysql.Driver";
+            String myUrl = "jdbc:mysql://218.54.47.24:3306/tweet";
+            Class.forName(myDriver);
+            Connection conn = DriverManager.getConnection(myUrl, "root", "tkfkdgo1_");
+
+            // our SQL SELECT query.
+            // if you only need a few columns, specify them by name instead of using "*"
+            String query = "SELECT stopword FROM stopwordtable";
+
+            // create the java statement
+            Statement st = conn.createStatement();
+
+            // execute the query, and get a java resultset
+            ResultSet rs = st.executeQuery(query);
+
+            // iterate through the java resultset
+            while (rs.next())
+            {
+                String stopword = rs.getString("stopword");
+                words.add(stopword);
+            }
+            st.close();
+        }
+        catch (Exception e)
+        {
+            System.err.println("Got an exception! ");
+            System.err.println(e.getMessage());
+        }
+        return words;
     }
 }
