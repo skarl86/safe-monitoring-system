@@ -34,7 +34,7 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     source.close()
   }
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit ={
-    val tweetRDD = _sc.textFile(inputPath).map(_.split("\t")(_SPLIT_INDEX))
+    val tweetRDD = _sc.textFile(inputPath).map(_.split("\t")(1))
 //    parseWord(tweet)
 //    val words = MutableList[String]()
     val writer = new PrintWriter(new File(outputPath))
@@ -42,14 +42,10 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     for(tweet <- tweetRDD.collect()){
       //      filterStopWord(_mecab.parseWord(tweet).asScala.mkString(","))
       //      words += _mecab.parseWord(tweet).asScala.mkString(",")
-      val temp =
-
-
       writer.write(_mecab.parseWord(tweet.replaceAll(_regexURL,"").replaceAll(_regexID,"")).asScala.mkString(","))
       writer.write("\n")
     }
     writer.close()
-//    words.foreach(println)
 
   }
 
