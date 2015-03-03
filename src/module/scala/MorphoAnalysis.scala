@@ -11,12 +11,12 @@ import scala.collection.JavaConverters._
 /**
  * Created by NCri on 15. 3. 3..
  */
-class MorphoAnalysis {
+class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
   System.load(System.getProperty("java.library.path") + "/libMeCab.so")
   private val _wordClass: String = "(.*NNG.*|.*NNP.*|.*NNB.*|.*NR.*|.*NP.*|.*SL.*)"
   private val _mecab = new MeCab()
-  private val _conf = new SparkConf().setAppName("makeKeyword").setMaster("local[*]")
-  private val _sc = new SparkContext(_conf)
+  private val _conf = conf
+  private val _sc = sc
 
   def makeKeywordInTweet(inputPath :String, outputPath: String): Unit ={
     val source = fromFile(inputPath)
@@ -35,7 +35,7 @@ class MorphoAnalysis {
 
     val tweet = _sc.textFile(inputPath).map(_.split("\t")(2))
 //    tweet.collect().foreach(println)
-    println(parseWord(tweet))
+//    println(parseWord(tweet))
   }
 
   def parseTweet(rowData:String): String ={ rowData.split("\t")(2) }
@@ -46,15 +46,9 @@ class MorphoAnalysis {
     for(tweet <- tweetRDD.collect()){
       words += _mecab.parseWord(tweet).asScala.mkString(",")
     }
-    filterStopWord(words)
-  }
-
-  def filterStopWord(words: MutableList[String]): Unit ={
     val stopword = fromFile("./dic/stopword").getLines().toString().split(",")
-    for(word <- words){
-//      if(stopword.contains(word))
-////        words
-    }
+    val filteredWord = words.filter(stopword.contains(_))
+    filteredWord.foreach(println)
   }
 
   def isStopWord(word: String): Boolean = {
