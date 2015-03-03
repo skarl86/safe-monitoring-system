@@ -13,7 +13,7 @@ public class MeCab {
         System.load(System.getProperty("java.library.path") + "/libMeCab.so");
     }
 
-    private String _wordClass = "(.*NNG.*|.*NNP.*|.*NNB.*|.*NR.*|.*NP.*|.*SL.*|.*SN.*)";// |.*VV.*|.*VA.*|.*MAG.*|.*XR.*)";
+    private String _wordClass = "(.*NNG.*|.*NNP.*|.*NNB.*|.*NR.*|.*NP.*|.*SL.*)";//|.*SN.*)";// |.*VV.*|.*VA.*|.*MAG.*|.*XR.*)";
     private String _unnecessaryWordClass = "(.*SF.*|.*SE.*|.*SSO.*|.*SSC.*|.*SC.*|.*SY.*)";
     private Tagger tagger = new Tagger("-d /usr/local/lib/mecab/dic/mecab-ko-dic");
 
@@ -51,25 +51,45 @@ public class MeCab {
         }
         return wordList;
     }
-    List<String> parseWord(String line) {
+    List<String> parseWord(String rowLine) {
         // TODO Auto-generated method stub
         List<String> wordList = new ArrayList<String>();
-        line = parseTweet(line);
 
-        root = tagger.parseToNode(line);
-        nextNode = root;
-        while (nextNode != null) {
-            key = nextNode.getSurface();
-            feature = nextNode.getFeature().split(",")[0];
-            if (feature.matches(_wordClass)){
-                // 명사 이외에 품사를 제외한 단어를 추출.
-                // 중복 단어 없이.
-                if(key.length() >= 1)
+        // 형태소 분석 결과.
+        String temp = tagger.parse(rowLine);
+        // 형태소 분석 결과를 라인 단위로 짜름.
+        String[] lines = temp.split("\n");
+
+        // 품사.
+        String feature = null;
+        // 단어.
+        String key = null;
+
+        for(String line : lines){
+            // 끝을 의미하는 EOS는 제외.
+            if(!line.equals("EOS")){
+                key = line.split("\t")[0];
+                feature = line.split("\t")[1].split(",")[0];
+                if(feature.matches(_wordClass)){
                     wordList.add(key);
+                }
             }
-
-            nextNode = nextNode.getNext();
         }
+
+//        root = tagger.parseToNode(line);
+//        nextNode = root;
+//        while (nextNode != null) {
+//            key = nextNode.getSurface();
+//            feature = nextNode.getFeature().split(",")[0];
+//            if (feature.matches(_wordClass)){
+//                // 명사 이외에 품사를 제외한 단어를 추출.
+//                // 중복 단어 없이.
+//                if(key.length() >= 1)
+//                    wordList.add(key);
+//            }
+//
+//            nextNode = nextNode.getNext();
+//        }
         return wordList;
     }
 }
