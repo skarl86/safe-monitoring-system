@@ -5,7 +5,6 @@ import org.apache.spark.mllib.feature.HashingTF
 import org.apache.spark.mllib.feature.IDF
 import org.apache.spark.mllib.linalg.Vector
 import org.apache.spark.rdd.RDD
-import scala.math._
 
 
 /**
@@ -100,9 +99,9 @@ object FeatureExtractor {
       case x :: xs => xs
     }
 
-    def log2(x: Double) = log(x) / log(2)
+    def log2(x: Double) = math.log(x) / math.log(2)
 
-    val final_data = keywordInfo.map(line  => line match {
+    val final_data = keywordInfo.map(line => line match {
       case (key, (yt, yy, yn), (nt, nn, ny)) => {
         val entropy = (yt / TWEET_TOTAL_COUNT) * ( ( (-yy / yt) * log2(yy / yt)) + ( (-yn / yt) * log2(yn / yt) ) ) +
           (nt / TWEET_TOTAL_COUNT) * ( ( (-nn / nt) * log2(nn / nt)) + ( (-ny / nt) * log2(ny / nt) ) )
