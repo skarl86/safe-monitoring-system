@@ -75,7 +75,7 @@ class FeatureExtractor(sc: SparkContext) {
     val noTweetCount = classCorpus.filter(x => x._1.equals("n")).count() + COLLECTION_VALUE
     val totalTweetCount = yesTweetCount + noTweetCount
 
-    for (keyword <- keywords) {
+    for (keyword <- keywords.collect()) {
 
       val yesFilteredTweet = classCorpus.filter(_._2.contains(keyword))
       val noFilteredTweet =classCorpus.filter(t => !(t._2.contains(keyword)))
