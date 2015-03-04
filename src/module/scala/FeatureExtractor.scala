@@ -30,7 +30,8 @@ class FeatureExtractor(sc: SparkContext) {
 
     // do database insert
     try {
-      val resultSet = statement.executeQuery("SELECT keyword FROM keyword")
+      val resultSet = statement.executeQuery(
+        "SELECT keyword FROM keyword")
       while(resultSet.next()){
         keywords += resultSet.getString("keyword")
 //        println(resultSet.getString("keyword"))
@@ -42,11 +43,25 @@ class FeatureExtractor(sc: SparkContext) {
     sc.parallelize(keywords.toList)
   }
 
+  def termFrequency(corpus: RDD[Seq[String]],
+                    desending: Boolean = false) = {
+
+    // 추후 Normalize 필요?
+    val keywordCount: RDD[(String, Int)] =
+      corpus
+        .flatMap(_.map((_, 1)))
+        .reduceByKey(_ + _)
+        .sortBy(_._2, desending)
+
+    keywordCount
+
+  }
+
   def tfidf(corpus: RDD[Seq[String]],
             method: String = "average",
             sort: String = "count",
-            desending: Boolean = false,
-            matrix: Boolean = false) = {
+            desending: Boolean = false
+            ) = {
 
     val hashingTF = new HashingTF()
     val tf: RDD[Vector] = hashingTF.transform(corpus)
@@ -73,27 +88,27 @@ class FeatureExtractor(sc: SparkContext) {
       keywordIndex.zip(tfidf).flatMap(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
 
     // Vector 만들기
-    matrix match {
-      case true =>
-        val keyword: Array[String] = keywordCount.map(_._1).collect()
-        val keywordTfidfInDoc: Array[Seq[(String, Double)]] =
-          keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2)))).collect()
-
-
-        val writer = new PrintWriter(new File("vector.txt" ))
-        writer.write(keyword.mkString(",") + "\n")
-
-        for (doc <- keywordTfidfInDoc) {
-          for (key <- keyword) {
-            val filtered = doc.filter(_._1.equals(key)).map(_._2)
-            if (!filtered.isEmpty) writer.write(filtered(0).toString() + ",")
-            else writer.write("-1.0,")
-          }
-          writer.write("\n")
-        }
-
-        writer.close()
-    }
+//    matrix match {
+//      case true =>
+//        val keyword: Array[String] = keywordCount.map(_._1).collect()
+//        val keywordTfidfInDoc: Array[Seq[(String, Double)]] =
+//          keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2)))).collect()
+//
+//
+//        val writer = new PrintWriter(new File("matrix.txt" ))
+//        writer.write(keyword.mkString(",") + "\n")
+//
+//        for (doc <- keywordTfidfInDoc) {
+//          for (key <- keyword) {
+//            val filtered = doc.filter(_._1.equals(key)).map(_._2)
+//            if (!filtered.isEmpty) writer.write(filtered(0).toString() + ",")
+//            else writer.write("-1.0,")
+//          }
+//          writer.write("\n")
+//        }
+//
+//        writer.close()
+//    }
 
     var reduceKeyword: RDD[(String, Double)] = null
     // 3. 추후 Average말고 다른 Method를 추가 가능.
