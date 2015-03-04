@@ -16,15 +16,12 @@ import scala.collection.JavaConverters._
 
 class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
   System.load(System.getProperty("java.library.path") + "/libMeCab.so")
-  private val _wordClass: String = "(.*NNG.*|.*NNP.*|.*NNB.*|.*NR.*|.*NP.*|.*SL.*)"
   private val _regexURL = "http://(([a-zA-Z][-a-zA-Z0-9]*([.][a-zA-Z][-a-zA-Z0-9]*){0,3})||([0-9]{1,3}([.][0-9]{1,3}){3}))/[a-zA-Z0-9]*"
   private val _regexID = "@[a-zA-Z0-9_:]*"
   private val _mecab = new MeCab()
-  private val _conf = conf
   private val _sc = sc
   private val _SPLIT_INDEX = 1
   private val _db = "jdbc:mysql://218.54.47.24:3306/tweet?user=root&password=tkfkdgo1_"
-  private val _delimeter:String = ","
 
   def makeKeywordInTweet(inputPath :String, outputPath: String): Unit ={
     val source = fromFile(inputPath)
@@ -38,12 +35,12 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     writer.close()
     source.close()
   }
-  def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit = {
-    val tweetRDD = getTweetDataFromDB
+  // domain = > 야구(1), 축구(2), 건강(3)
+  def makeRDDKeywordInTweet(inputPath :String, outputPath: String, domain: Int): Unit = {
+
+    val tweetRDD = getTweetDataFromDB(domain)
 //    val tweetRDD = getTweetDataFromFile(inputPath)//_sc.textFile(inputPath).map(_.split("\t")(2))
-//
     val writer = new PrintWriter(new File(outputPath))
-//
     for (tweet <- tweetRDD.collect()) {
       //      filterStopWord(_mecab.parseWord(tweet).asScala.mkString(","))
       //      words += _mecab.parseWord(tweet).asScala.mkString(",")
@@ -52,21 +49,19 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
       //      writer.write("\n")
       val wordList = ngram(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
 
-//      insertKeywordToDB(tweet._1,wordList)
+      insertKeywordToDB(tweet._1,wordList)
 
       writer.write(wordList.mkString(","))
       writer.write("\n")
     }
     writer.close()
-
   }
+
   def insertKeywordToDB(tweetID:Int, words:List[String] ): Unit ={
-//    println("(" + tweetID + ", " + words.mkString(","))
     classOf[com.mysql.jdbc.Driver]
     val conn = DriverManager.getConnection(_db)
     val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
 
-    // do database insert
     try {
       val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
       prep.setInt(1, tweetID)
@@ -77,6 +72,7 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
       conn.close
     }
   }
+
   def getTweetDataFromFile(path : String): RDD[String] ={
     _sc.textFile(path).map(_.split("\t")(2))
   }
@@ -92,8 +88,7 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     try {
       val resultSet = statement.executeQuery("SELECT stopword FROM stopwordtable")
       while(resultSet.next()){
-//        stopWords += resultSet.getString("stopword")
-        println(resultSet.getString("stopword"))
+        stopWords += resultSet.getString("stopword")
       }
     } catch{
       case e => e.printStackTrace
@@ -101,7 +96,7 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
 
     _sc.parallelize(stopWords.toList)
   }
-  def getTweetDataFromDB(): RDD[(Int, String)] ={
+  def getTweetDataFromDB(domain: Int): RDD[(Int, String)] ={
     // DB연동
 
     classOf[com.mysql.jdbc.Driver]
@@ -112,12 +107,11 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
 
     // do database insert
     try {
-      val resultSet = statement.executeQuery("SELECT tweetid, text FROM marktweettable")
+      val resultSet = statement.executeQuery("SELECT tweetid, text FROM marktweettable where domain = " + domain)
       while(resultSet.next()){
         val tweetId = resultSet.getInt("tweetid")
         val text = resultSet.getString("text")
 
-//        println("ID = " + tweetId + " // text = " + text)
         val tuple = (tweetId, text)
         tweetData += tuple
       }
@@ -160,12 +154,4 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
   }
 
   def parseTweet(rowData:String): String ={ rowData.split("\t")(_SPLIT_INDEX) }
-
-  def parseWord(tweetRDD: RDD[String]): Unit ={
-
-  }
-  def isStopWord(word: String): Boolean = {
-    val stopwordsBrod = fromFile("./dic/stopword").getLines().toString().split(",")
-    stopwordsBrod.contains(word)
-  }
 }
