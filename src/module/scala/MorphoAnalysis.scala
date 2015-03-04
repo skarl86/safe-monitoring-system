@@ -47,7 +47,7 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
 
       //      writer.write(_mecab.parseWord(tweet.replaceAll(_regexURL,"").replaceAll(_regexID,"")).asScala.mkString(","))
       //      writer.write("\n")
-      val wordList = ngram(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+      val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
 
       insertKeywordToDB(tweet._1,wordList)
 
@@ -77,25 +77,27 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     _sc.textFile(path).map(_.split("\t")(2))
   }
 
-  def getStopWordFromDB(): RDD[String] ={
-    classOf[com.mysql.jdbc.Driver]
+//  def getStopWordFromDB(): RDD[String] = {
+//    val stopwords = fromFile("./dic/stopword.txt")
 
-    val conn = DriverManager.getConnection(_db)
-    val statement = conn.createStatement()
-    var stopWords:ListBuffer[String] = new ListBuffer()
-
-    // do database insert
-    try {
-      val resultSet = statement.executeQuery("SELECT stopword FROM stopwordtable")
-      while(resultSet.next()){
-        stopWords += resultSet.getString("stopword")
-      }
-    } catch{
-      case e => e.printStackTrace
-    }
-
-    _sc.parallelize(stopWords.toList)
-  }
+//    classOf[com.mysql.jdbc.Driver]
+//
+//    val conn = DriverManager.getConnection(_db)
+//    val statement = conn.createStatement()
+//    var stopWords:ListBuffer[String] = new ListBuffer()
+//
+//    // do database insert
+//    try {
+//      val resultSet = statement.executeQuery("SELECT stopword FROM stopwordtable")
+//      while(resultSet.next()){
+//        stopWords += resultSet.getString("stopword")
+//      }
+//    } catch{
+//      case e => e.printStackTrace
+//    }
+//
+//    _sc.parallelize(stopWords.toList)
+//  }
   def getTweetDataFromDB(domain: Int): RDD[(Int, String)] ={
     // DB연동
 
@@ -123,6 +125,15 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
     _sc.parallelize(tweetData.toList)
   }
 
+  def ngram2(n: Int, words: List[String]): List[String] = {
+    val ngrams = (for( i <- 1 to n) yield words.sliding(i).map(p => p.toList)).flatMap(x => x)
+    var newWords = new ListBuffer[String]()
+    for(cardinate <- ngrams){
+      //println(cardinate.mkString)
+      newWords += (cardinate.mkString)
+    }
+    newWords.toList
+  }
   def ngram(n : Int, words: List[String]): List[String] = {
     val categoryKeywordsRDD = _sc.textFile("./dic/keywords.txt").map(_.split(","))
     val ngrams = (for( i <- n to n) yield words.sliding(i).map(p => p.toList)).flatMap(x => x)
