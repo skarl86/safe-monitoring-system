@@ -24,6 +24,18 @@ class MorphoAnalysis(sc:SparkContext) {
   private val _sc = sc
   private val _db = "jdbc:mysql://218.54.47.24:3306/tweet?user=root&password=tkfkdgo1_"
 
+  def writeFileForTextPerLine(path:String, textPerLine:String): Unit ={
+    val writer = new PrintWriter(new File(path))
+    writer.write(textPerLine)
+    writer.write("\n")
+    writer.close()
+  }
+
+  def writeFileForTextPerLine(path:String, textPerLines:List[String]): Unit ={
+    val writer = new PrintWriter(new File(path))
+    writer.write(textPerLines.mkString("\n"))
+    writer.close()
+  }
   def makeKeywordInTweet(inputPath :String, outputPath: String): Unit ={
     val source = fromFile(inputPath)
     val lines = source.getLines()
@@ -46,15 +58,11 @@ class MorphoAnalysis(sc:SparkContext) {
   }
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit = {
     val tweetRDD = getTweetDataFrom(inputPath)
-    val writer = new PrintWriter(new File(outputPath))
-
     for (tweet <- tweetRDD.collect()) {
       val wordList = ngram2(2, _mecab.parseWord(tweet.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
 
-      writer.write(wordList.mkString(","))
-      writer.write("\n")
+      writeFileForTextPerLine(outputPath, wordList.mkString(","))
     }
-    writer.close()
   }
 
   def insertKeywordToDB(tweetID:Int, words:List[String] ): Unit ={
@@ -99,13 +107,10 @@ class MorphoAnalysis(sc:SparkContext) {
     _sc.parallelize(tweetData.toList)
   }
   def getTweetDataFrom(path : String): RDD[String] = {
-    _sc.textFile(path).map(_.split("\t")(2))
+    _sc.textFile(path).map(_.split("\t")(1))
   }
 
   def ngram2(n: Int, words: List[String]): List[String] = {
-    val wordsRDD = _sc.parallelize(words)
-
-
     val ngrams = (for( i <- 1 to n) yield words.sliding(i).map(p => p.toList)).flatMap(x => x)
     var newWords = new ListBuffer[String]()
     for(cardinate <- ngrams){
