@@ -46,14 +46,18 @@ class FeatureExtractor(sc: SparkContext) {
   def termFrequency(corpus: RDD[Seq[String]],
                     desending: Boolean = false) = {
 
-    // 추후 Normalize 필요?
     val keywordCount: RDD[(String, Int)] =
-      corpus
-        .flatMap(_.map((_, 1)))
+      corpus.flatMap(_.map((_, 1)))
         .reduceByKey(_ + _)
-        .sortBy(_._2, desending)
 
-    keywordCount
+    val static: RDD[Int] = keywordCount.map(_._2)
+
+    val mean = static.mean()
+    val range = static.max() - static.min()
+    // Mean Normalization 적용
+    val normalKeywordCount = keywordCount.map(t => (t._1, (t._2 - mean) / range))
+
+    normalKeywordCount.sortBy(_._2, desending)
 
   }
 
@@ -139,7 +143,9 @@ class FeatureExtractor(sc: SparkContext) {
   }
 
   def entropy(classCorpus: RDD[(String, String)],
-              keywords: RDD[String]) = {
+              keywords: RDD[String],
+              desending: Boolean = false,
+              matrix: Boolean = false) = {
 
     val COLLECTION_VALUE = 0.0000000000000001
     val TWEET_TOTAL_COUNT = classCorpus.count()
@@ -191,7 +197,30 @@ class FeatureExtractor(sc: SparkContext) {
       }
     }).sortBy(x => x._2)
 
-    val keywordEntropy = sc.parallelize(final_data)
+    val keywordEntropy = sc.parallelize(final_data).sortBy(_._2, desending)
+
+    matrix match {
+      case true => {
+        val documents: Array[(String, Seq[String])] =
+          classCorpus.map(t => (t._1, t._2.split(" ").toSeq)).collect()
+
+        val keyword: Array[String] = keywordEntropy.map(_._1).take(200)
+
+        val writer = new PrintWriter(new File("matrix_entropy.csv"))
+        writer.write(keyword.mkString(",") + ",class\n")
+
+        for (doc <- documents) {
+          for (key <- keyword) {
+            val filtered = doc._2.filter(_.equals(key))
+            if (!filtered.isEmpty) writer.write("1,")
+            else writer.write("0,")
+          }
+          writer.write(doc._1 + "\n")
+        }
+
+        writer.close()
+      }
+    }
 
     keywordEntropy
 
