@@ -1,4 +1,6 @@
-import org.apache.spark.SparkConf
+import java.io.{File, PrintWriter}
+import java.sql.DriverManager
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.mllib.feature.HashingTF
@@ -6,6 +8,7 @@ import org.apache.spark.mllib.feature.IDF
 import org.apache.spark.mllib.linalg.Vector
 import org.apache.spark.rdd.RDD
 
+import scala.collection.mutable.ListBuffer
 
 /**
  * Start Date : 2015/02/27
@@ -16,10 +19,34 @@ import org.apache.spark.rdd.RDD
 
 class FeatureExtractor(sc: SparkContext) {
 
+  private val _db = "jdbc:mysql://218.54.47.24:3306/tweet?user=root&password=tkfkdgo1_"
+
+  def getKeywordFromDB(): RDD[String] ={
+    classOf[com.mysql.jdbc.Driver]
+
+    val conn = DriverManager.getConnection(_db)
+    val statement = conn.createStatement()
+    var keywords:ListBuffer[String] = new ListBuffer()
+
+    // do database insert
+    try {
+      val resultSet = statement.executeQuery("SELECT keyword FROM keyword")
+      while(resultSet.next()){
+        keywords += resultSet.getString("keyword")
+//        println(resultSet.getString("keyword"))
+      }
+    } catch{
+      case e => e.printStackTrace
+    }
+
+    sc.parallelize(keywords.toList)
+  }
+
   def tfidf(corpus: RDD[Seq[String]],
             method: String = "average",
             sort: String = "count",
-            desending: Boolean = false) = {
+            desending: Boolean = false,
+            matrix: Boolean = false) = {
 
     val hashingTF = new HashingTF()
     val tf: RDD[Vector] = hashingTF.transform(corpus)
@@ -44,6 +71,29 @@ class FeatureExtractor(sc: SparkContext) {
 
     val keywordTfidf: RDD[(String, Double)] =
       keywordIndex.zip(tfidf).flatMap(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
+
+    // Vector 만들기
+    matrix match {
+      case true =>
+        val keyword: Array[String] = keywordCount.map(_._1).collect()
+        val keywordTfidfInDoc: Array[Seq[(String, Double)]] =
+          keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2)))).collect()
+
+
+        val writer = new PrintWriter(new File("vector.txt" ))
+        writer.write(keyword.mkString(",") + "\n")
+
+        for (doc <- keywordTfidfInDoc) {
+          for (key <- keyword) {
+            val filtered = doc.filter(_._1.equals(key)).map(_._2)
+            if (!filtered.isEmpty) writer.write(filtered(0).toString() + ",")
+            else writer.write("-1.0,")
+          }
+          writer.write("\n")
+        }
+
+        writer.close()
+    }
 
     var reduceKeyword: RDD[(String, Double)] = null
     // 3. 추후 Average말고 다른 Method를 추가 가능.
