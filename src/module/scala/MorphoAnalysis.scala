@@ -37,9 +37,8 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
   }
   // domain = > 야구(1), 축구(2), 건강(3)
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String, domain: Int): Unit = {
-
-    val tweetRDD = getTweetDataFromDB(domain)
-//    val tweetRDD = getTweetDataFromFile(inputPath)//_sc.textFile(inputPath).map(_.split("\t")(2))
+//    val tweetRDD = getTweetDataFromDB(domain)
+    val tweetRDD = getTweetDataFromFile(inputPath)//_sc.textFile(inputPath).map(_.split("\t")(2))
     val writer = new PrintWriter(new File(outputPath))
     for (tweet <- tweetRDD.collect()) {
       //      filterStopWord(_mecab.parseWord(tweet).asScala.mkString(","))
@@ -47,9 +46,10 @@ class MorphoAnalysis(conf:SparkConf, sc:SparkContext) {
 
       //      writer.write(_mecab.parseWord(tweet.replaceAll(_regexURL,"").replaceAll(_regexID,"")).asScala.mkString(","))
       //      writer.write("\n")
-      val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
-
-      insertKeywordToDB(tweet._1,wordList)
+//      val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+      val wordList = ngram2(2, _mecab.parseWord(tweet.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+//
+//      insertKeywordToDB(tweet._1,wordList)
 
       writer.write(wordList.mkString(","))
       writer.write("\n")
