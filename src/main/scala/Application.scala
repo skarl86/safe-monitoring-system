@@ -17,7 +17,8 @@ object Application {
     val morpho = new MorphoAnalysis(conf, sc)
 //    val featureExtractor = new FeatureExtractor(sc)
 //
-    morpho.makeRDDKeywordInTweet("./input/data_5000.txt","./output/keyword.txt")
+    morpho.makeRDDKeywordInTweet("./input/data_5000.txt","./output/output.txt", 3)
+
 //    morpho.getStopWordFromDB
 //    val corpus: RDD[Seq[String]] = sc.textFile("output/keyword.txt").map(_.split(",").toSeq)
 ////    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
