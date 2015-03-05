@@ -16,8 +16,11 @@ object Application {
 //
     val morpho = new MorphoAnalysis(sc)
     val featureExtractor = new FeatureExtractor(sc)
-//
-    morpho.makeRDDKeywordInTweet("./input/data.txt","./output/output.txt")
+    val testDriver = new TestDriver(sc, morpho, featureExtractor)
+
+    testDriver.run("input/data.txt", "output_entropy", "termFrequency")
+
+//    morpho.makeRDDKeywordInTweet("./input/data.txt","./output/output.txt")
 
     // TFIDF corpus
 //    val corpus: RDD[Seq[String]] = sc.textFile("output/output.txt").map(_.split(",").toSeq)
@@ -25,8 +28,8 @@ object Application {
 //    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
 //    val keywords: RDD[String] = sc.textFile("input/trainingset_keyword_1000.txt").map(_.split(",")(0))
     // Entropy Matrix
-    val corpus: RDD[(String, String)] = sc.textFile("input/test_data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
-    val keywords: RDD[String] = sc.textFile("input/entropy_keyword.txt").map(_.split(",")(0))
+//    val corpus: RDD[(String, String)] = sc.textFile("input/test_data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
+//    val keywords: RDD[String] = sc.textFile("input/entropy_keyword.txt").map(_.split(",")(0))
 
 ////    corpus.foreach(println)
 //
@@ -41,6 +44,6 @@ object Application {
 //    val entropy = featureExtractor.entropy(corpus, keywords, false, true)
 //    entropy.coalesce(1).saveAsTextFile("output_entropy")
 
-    featureExtractor.entropyMatrix(corpus, keywords)
+//    featureExtractor.entropyMatrix(corpus, keywords)
   }
 }
