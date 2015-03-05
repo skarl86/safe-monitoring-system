@@ -220,9 +220,36 @@ class FeatureExtractor(sc: SparkContext) {
 
         writer.close()
       }
+      case false => {
+
+      }
     }
 
     keywordEntropy
+
+  }
+
+  def entropyMatrix(classCorpus: RDD[(String, String)],
+                    keywords: RDD[String]): Unit = {
+
+    val documents: Array[(String, Seq[String])] =
+      classCorpus.map(t => (t._1, t._2.split(" ").toSeq)).collect()
+
+    val keyword: Array[String] = keywords.collect()
+
+    val writer = new PrintWriter(new File("test_matrix_entropy.csv"))
+    writer.write(keyword.mkString(",") + ",class\n")
+
+    for (doc <- documents) {
+      for (key <- keyword) {
+        val filtered = doc._2.filter(_.equals(key))
+        if (!filtered.isEmpty) writer.write("1,")
+        else writer.write("0,")
+      }
+      writer.write(doc._1 + "\n")
+    }
+
+    writer.close()
 
   }
 
