@@ -3,6 +3,7 @@ import java.sql.DriverManager
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.feature.HashingTF
 import org.apache.spark.mllib.feature.IDF
 import org.apache.spark.mllib.linalg.Vector
@@ -250,6 +251,75 @@ class FeatureExtractor(sc: SparkContext) {
     }
 
     writer.close()
+
+  }
+
+  def apriori(inputPath: String,
+              maxIterations: Int,
+              minSup: Int,
+              outputPath: String) = {
+
+    val documentIdDelimiter = "\t"
+    val documentItemDelimiter = " "
+
+    var k = 1
+    var hasConverged = false
+
+    // Step1
+    val documents = sc.textFile(inputPath).map { line =>
+      val lineIndex = line.indexOf(documentIdDelimiter)
+      val key = line.substring(0, lineIndex)
+      val value = line.substring(lineIndex + 1, line.length)
+      value.split(documentItemDelimiter).distinct.mkString(documentItemDelimiter)
+    }
+
+    var previousRules: Broadcast[Array[String]] = null
+
+    def findCandidates(documents: RDD[String],
+                       prevRules: Broadcast[Array[String]],
+                       k: Int,
+                       minSup: Int): RDD[String] = {
+      documents.flatMap { items =>
+        var cItems1: Array[Int] = items.split(documentItemDelimiter).map(_.toInt).sorted.toArray
+        var combGen1 = new CombinationGenerator()
+        var combGen2 = new CombinationGenerator()
+
+        var candidates = scala.collection.mutable.ListBuffer.empty[(String, Int)]
+        combGen1.reset(k, cItems1)
+
+        while (combGen1.hasNext()) {
+          var cItems2 = combGen1.next()
+          var valid = true
+          if (k > 1) {
+            combGen2.reset(k-1, cItems2)
+            while (combGen2.hasNext && valid) {
+              valid = prevRules.value.contains(java.util.Arrays.toString(combGen2.next()))
+            }
+          }
+          if (valid) {
+            candidates += Tuple2(java.util.Arrays.toString(cItems2), 1)
+          }
+        }
+        candidates
+      }.reduceByKey(_+_).filter(_._2 >= minSup).map { case (itemset, _) => itemset }
+    }
+
+    while(k < maxIterations && !hasConverged) {
+      printf("Starting Iteration %s\n", k)
+      // Step2
+      var supportedRules = findCandidates(documents, previousRules, k, minSup)
+      var tempPrevRules = supportedRules.collect()
+      var ruleCount = tempPrevRules.length
+      if (0 == ruleCount) {
+        hasConverged = true
+      } else {
+        previousRules = sc.broadcast(tempPrevRules)
+        supportedRules.coalesce(1).saveAsTextFile(outputPath + "/" + k)
+        k += 1
+      }
+    }
+
+    printf("Converged at Iteration %s\n", k)
 
   }
 

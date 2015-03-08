@@ -11,6 +11,7 @@ class TestDriver(sc: SparkContext,
 
   def run(inputPath: String,
           outputPath: String,
+          keywordSet: RDD[String] = null,
           keywordMethod: String) = {
 
     // 1. 형태소 분석기를 통하여 기존의 문서를 다시 생성.
@@ -19,21 +20,29 @@ class TestDriver(sc: SparkContext,
 
     // 2. Term-Frequency로 키워드를 1000개 추출 => 사용자가 원하는 특징점에 따라 수행하도록 추후 바꾸자.
     var keywords: RDD[String] = null
-    keywordMethod match {
-      case "termFrequency" => {
-        keywords =
-          sc.parallelize(
-            featureExtractor.termFrequency(corpus, false)
-              .take(1000)
-              .map(_._1)
-          )
+
+    keywordSet match {
+      case null => {
+        keywordMethod match {
+          case "termFrequency" => {
+            keywords =
+              sc.parallelize(
+                featureExtractor.termFrequency(corpus, false)
+                  .take(1000)
+                  .map(_._1)
+              )
+          }
+          case "tfidf" => {
+
+          }
+
+          case "entropy" => {
+
+          }
+        }
       }
-      case "tfidf" => {
-
-      }
-
-      case "entropy" => {
-
+      case _ => {
+        keywords = keywordSet
       }
     }
 

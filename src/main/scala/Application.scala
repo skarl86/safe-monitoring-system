@@ -13,12 +13,39 @@ object Application {
 
     val conf = new SparkConf().setAppName("Safe-Monitoring-System").setMaster("local[*]")
     val sc = new SparkContext(conf)
+//    val samples = Array((Array("a"), Array(1, 1, 1, 1, 1)), // (1, 2, 3, 4, 5)
+//                        (Array("b"), Array(1, 1, 1, 0, 1)), // (1, 2, 3, 5)
+//                        (Array("c"), Array(1, 0, 1, 1, 1)), // (1, 3, 4, 5)
+//                        (Array("d"), Array(1, 0, 1, 0, 1)), // (1, 3, 5)
+//                        (Array("e"), Array(1, 0, 0, 1, 1))) // (1, 4, 5)
 //
+//    val compare = Array(samples(2)._1.zip(samples(4)._1), samples(2)._2.zip(samples(4)_2))
+//    compare(0)
+//    compare.foreach(println)
+//    println(compare.filter(t => (t._1 == 0 && t._2 == 1)).isEmpty) // true면 _2 < _1
+//    if ()
+
+//    var hirarchy: Array[(Array[String], Array[Int])] = null
+//
+//    for (s <- samples) {
+//
+//    }
+
+    // 1. 기본적인 Class 설정
     val morpho = new MorphoAnalysis(sc)
     val featureExtractor = new FeatureExtractor(sc)
+
+    // Apriori 테스트
+//    featureExtractor.apriori("input/apriori_data.txt", 10, 3, "output_apriori")
+
     val testDriver = new TestDriver(sc, morpho, featureExtractor)
 
-    testDriver.run("input/data.txt", "output_entropy", "termFrequency")
+    // Matrix 자동화 모듈
+    // keyword가 존재하지 않을 경우(training_set)
+    testDriver.run("input/data.txt", "output_entropy", null, "termFrequency")
+    // keyword가 존재할 경우(test_set)
+//    val keywords: RDD[String] = sc.textFile("input/trainingset_keyword_1000.txt").map(_.split(",")(0))
+//    testDriver.run("input/data.txt", "output_entropy", keywords, "termFrequency")
 
 //    morpho.makeRDDKeywordInTweet("./input/data.txt","./output/output.txt")
 
