@@ -112,7 +112,8 @@ class MorphoAnalysis(sc:SparkContext) {
     _sc.parallelize(tweetData.toList)
   }
   def getTweetDataFrom(path : String): RDD[String] = {
-    _sc.textFile(path).map(_.split("\t")(1))
+//    _sc.textFile(path).map(_.split("\t")(1))
+    _sc.textFile(path).map(_.split(",").toList).map(list => list.tail.mkString(" "))
   }
 
   def ngram2(n: Int, words: List[String]): List[String] = {
