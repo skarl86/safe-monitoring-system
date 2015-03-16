@@ -62,6 +62,25 @@ class FeatureExtractor(sc: SparkContext) {
 
   }
 
+  def tfidfByDocument(corpus: RDD[Seq[String]]): RDD[Seq[(String, Double)]] = {
+
+    val hashingTF = new HashingTF()
+    val tf: RDD[Vector] = hashingTF.transform(corpus)
+
+    tf.cache()
+    val idf = new IDF().fit(tf)
+    val tfidf: RDD[Vector] = idf.transform(tf)
+
+    // 1. 각 키워드 Count
+    val keywordCount: RDD[(String, Int)] = corpus.flatMap(_.map((_, 1))).reduceByKey(_ + _)
+
+    // 2. 각 키워드별 TF-IDF 매칭 작업.
+    val keywordIndex = corpus.map(seq => seq.map(str => (str, hashingTF.indexOf(str))))
+
+    keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
+
+  }
+
   def tfidf(corpus: RDD[Seq[String]],
             method: String = "average",
             sort: String = "count",
@@ -118,11 +137,16 @@ class FeatureExtractor(sc: SparkContext) {
     var reduceKeyword: RDD[(String, Double)] = null
     // 3. 추후 Average말고 다른 Method를 추가 가능.
     method match {
-      case "average" =>
+      case "average" => {
         reduceKeyword =
           keywordTfidf.mapValues((_, 1))
-          .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
-          .mapValues(x => x._1 / x._2)
+            .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
+            .mapValues(x => x._1 / x._2)
+      }
+
+      case "std" => {
+
+      }
     }
 
     // 4. Sort 방법, asending / descending
