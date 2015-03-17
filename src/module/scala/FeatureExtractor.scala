@@ -177,10 +177,6 @@ class FeatureExtractor(sc: SparkContext) {
                     keywords: Array[String],
                     outputFilename: String): Unit = {
 
-    // 1. corpus의 첫번째가 class, 나머지는 tweet content
-
-
-    // 2. Matrix의 첫번째 Row는 각 키워드들
     val writer = new PrintWriter(new File(outputFilename))
     writer.write(keywords.mkString(",") + ",class\n")
 
