@@ -20,11 +20,9 @@ object Application {
     val testDriver = new TestDriver(sc, morpho, featureExtractor)
 
     // 2. Matrix 생성 모듈
-    // 2-1. keyword list가 존재하지 않을 경우 (training_set)
-    testDriver.run("input/data.txt", "output_entropy", null, 1000, "termFrequency")
+    testDriver.run("input/data.txt", "matrix.csv", null, "keyword/keywords.txt", 1000, 200, "tf")
     // 2-2. keyword list 가 존재할 경우 (test_set)
-//    testDriver.run("input/data.txt", "output_entropy", "input/trainingset_keyword_1000.txt", "termFrequency")
-//    testDriver.runTfidf("input/data.txt", null, 1000)
+//    testDriver.run("input/data.txt", "matrix.csv", "keyword/keywords.txt", null, 0, 0, "tf")
 
   }
 }

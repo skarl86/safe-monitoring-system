@@ -29,13 +29,11 @@ class FeatureExtractor(sc: SparkContext) {
     val statement = conn.createStatement()
     var keywords:ListBuffer[String] = new ListBuffer()
 
-    // do database insert
     try {
       val resultSet = statement.executeQuery(
         "SELECT keyword FROM keyword")
       while(resultSet.next()){
         keywords += resultSet.getString("keyword")
-//        println(resultSet.getString("keyword"))
       }
     } catch{
       case e => e.printStackTrace
@@ -44,25 +42,29 @@ class FeatureExtractor(sc: SparkContext) {
     sc.parallelize(keywords.toList)
   }
 
-  def termFrequency(corpus: RDD[Seq[String]],
-                    desending: Boolean = false) = {
+  def termFrequencyOfKeywords(corpus: RDD[Seq[String]],
+                    sort: Boolean = false): RDD[(String, Double)] = {
 
     val keywordCount: RDD[(String, Int)] =
       corpus.flatMap(_.map((_, 1)))
         .reduceByKey(_ + _)
 
-    val static: RDD[Int] = keywordCount.map(_._2)
+    val tf: RDD[Int] = keywordCount.map(_._2)
 
-    val mean = static.mean()
-    val range = static.max() - static.min()
+    val tfMean = tf.mean()
+    val tfRange = tf.max() - tf.min()
     // Mean Normalization 적용
-    val normalKeywordCount = keywordCount.map(t => (t._1, (t._2 - mean) / range))
+    // -1 <= tf <= 1
+    val normalKeywordCount =
+      keywordCount
+        .map(t => (t._1, (t._2 - tfMean) / tfRange))
+        .sortBy(_._2, sort)
 
-    normalKeywordCount.sortBy(_._2, desending)
+    normalKeywordCount
 
   }
 
-  def tfidfByDocument(corpus: RDD[Seq[String]]): RDD[Seq[(String, Double)]] = {
+  def tfidfOfDocuments(corpus: RDD[Seq[String]]): RDD[Seq[(String, Double)]] = {
 
     val hashingTF = new HashingTF()
     val tf: RDD[Vector] = hashingTF.transform(corpus)
@@ -77,71 +79,28 @@ class FeatureExtractor(sc: SparkContext) {
     // 2. 각 키워드별 TF-IDF 매칭 작업.
     val keywordIndex = corpus.map(seq => seq.map(str => (str, hashingTF.indexOf(str))))
 
-    keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
+    val tfidfOfDocuments =
+      keywordIndex.zip(tfidf)
+        .map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
+
+    tfidfOfDocuments
 
   }
 
-  def tfidf(corpus: RDD[Seq[String]],
+  def tfidfOfKeywords(corpus: RDD[Seq[String]],
             method: String = "average",
-            sort: String = "count",
-            desending: Boolean = false
-            ) = {
+            sort: Boolean = false): RDD[(String, Double)] = {
 
-    val hashingTF = new HashingTF()
-    val tf: RDD[Vector] = hashingTF.transform(corpus)
+    val keywordTfidf: RDD[(String, Double)] = tfidfOfDocuments(corpus).flatMap(_.toList)
 
-    tf.cache()
-    val idf = new IDF().fit(tf)
-    val tfidf: RDD[Vector] = idf.transform(tf)
-
-    // 1. 각 키워드 Count
-    val keywordCount: RDD[(String, Int)] = corpus.flatMap(_.map((_, 1))).reduceByKey(_ + _)
-
-    // IDF
-//    val keywordIdf = corpus.flatMap(seq => seq.map(str => (str, idf.idf(hashingTF.indexOf(str)))))
-//
-//    val keywordIdf2 =
-//      keywordIdf.mapValues((_, 1))
-//      .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
-//      .mapValues(x => x._1 / x._2)
-
-    // 2. 각 키워드별 TF-IDF 매칭 작업.
-    val keywordIndex = corpus.map(seq => seq.map(str => (str, hashingTF.indexOf(str))))
-
-    val keywordTfidf: RDD[(String, Double)] =
-      keywordIndex.zip(tfidf).flatMap(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
-
-    // Vector 만들기
-//    matrix match {
-//      case true =>
-//        val keyword: Array[String] = keywordCount.map(_._1).collect()
-//        val keywordTfidfInDoc: Array[Seq[(String, Double)]] =
-//          keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2)))).collect()
-//
-//
-//        val writer = new PrintWriter(new File("matrix.txt" ))
-//        writer.write(keyword.mkString(",") + "\n")
-//
-//        for (doc <- keywordTfidfInDoc) {
-//          for (key <- keyword) {
-//            val filtered = doc.filter(_._1.equals(key)).map(_._2)
-//            if (!filtered.isEmpty) writer.write(filtered(0).toString() + ",")
-//            else writer.write("-1.0,")
-//          }
-//          writer.write("\n")
-//        }
-//
-//        writer.close()
-//    }
-
-    var reduceKeyword: RDD[(String, Double)] = null
-    // 3. 추후 Average말고 다른 Method를 추가 가능.
+    var reduceKeywordTfidf: RDD[(String, Double)] = null
+    // 추후 Average말고 다른 Method를 추가 가능.
     method match {
       case "average" => {
-        reduceKeyword =
+        reduceKeywordTfidf =
           keywordTfidf.mapValues((_, 1))
             .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
-            .mapValues(x => x._1 / x._2)
+            .mapValues(x => x._1 / x._2).sortBy(_._2, sort)
       }
 
       case "std" => {
@@ -149,42 +108,28 @@ class FeatureExtractor(sc: SparkContext) {
       }
     }
 
-    // 4. Sort 방법, asending / descending
-    var keywordCountTfidf: RDD[(String, (Int, Double))] = null
-
-//    val keywordCountTfidf = keywordCount.join(reduceKeyword).join(keywordIdf2).sortBy(_._2._2, desending)
-    sort match  {
-      case "count" =>
-        keywordCountTfidf =
-          keywordCount.join(reduceKeyword).sortBy(_._2._1, desending)
-
-      case "tfidf" =>
-        keywordCountTfidf =
-          keywordCount.join(reduceKeyword).sortBy(_._2._2, desending)
-    }
-
-    keywordCountTfidf
+    reduceKeywordTfidf
 
   }
 
-  def entropy(classCorpus: RDD[(String, String)],
+  def entropyOfKeywords(classCorpus: RDD[(String, Seq[String])],
               keywords: RDD[String],
-              desending: Boolean = false,
-              matrix: Boolean = false) = {
+              sort: Boolean = false): RDD[(String, Double)] = {
 
+    val classCorpusString = classCorpus.map(t => (t._1, t._2.mkString(" ")))
     val COLLECTION_VALUE = 0.0000000000000001
-    val TWEET_TOTAL_COUNT = classCorpus.count()
+    val TWEET_TOTAL_COUNT = classCorpusString.count()
 
     var keywordInfo = List(("start", (.0, .0, .0), (.0, .0, .0)))
 
-    val yesTweetCount = classCorpus.filter(x => x._1.equals("p")).count() + COLLECTION_VALUE
-    val noTweetCount = classCorpus.filter(x => x._1.equals("n")).count() + COLLECTION_VALUE
+    val yesTweetCount = classCorpusString.filter(x => x._1.equals("p")).count() + COLLECTION_VALUE
+    val noTweetCount = classCorpusString.filter(x => x._1.equals("n")).count() + COLLECTION_VALUE
     val totalTweetCount = yesTweetCount + noTweetCount
 
     for (keyword <- keywords.collect()) {
 
-      val yesFilteredTweet = classCorpus.filter(_._2.contains(keyword))
-      val noFilteredTweet =classCorpus.filter(t => !(t._2.contains(keyword)))
+      val yesFilteredTweet = classCorpusString.filter(_._2.contains(keyword))
+      val noFilteredTweet =classCorpusString.filter(t => !(t._2.contains(keyword)))
 
       val yesTotalCount = yesFilteredTweet.count()
       val noTotalCount = TWEET_TOTAL_COUNT - yesTotalCount
@@ -222,51 +167,25 @@ class FeatureExtractor(sc: SparkContext) {
       }
     }).sortBy(x => x._2)
 
-    val keywordEntropy = sc.parallelize(final_data).sortBy(_._2, desending)
-
-    matrix match {
-      case true => {
-        val documents: Array[(String, Seq[String])] =
-          classCorpus.map(t => (t._1, t._2.split(" ").toSeq)).collect()
-
-        val keyword: Array[String] = keywordEntropy.map(_._1).take(200)
-
-        val writer = new PrintWriter(new File("matrix_entropy.csv"))
-        writer.write(keyword.mkString(",") + ",class\n")
-
-        for (doc <- documents) {
-          for (key <- keyword) {
-            val filtered = doc._2.filter(_.equals(key))
-            if (!filtered.isEmpty) writer.write("1,")
-            else writer.write("0,")
-          }
-          writer.write(doc._1 + "\n")
-        }
-
-        writer.close()
-      }
-      case false => {
-
-      }
-    }
+    val keywordEntropy = sc.parallelize(final_data).sortBy(_._2, sort)
 
     keywordEntropy
 
   }
 
-  def entropyMatrix(classCorpus: RDD[(String, String)],
-                    keywords: RDD[String]): Unit = {
+  def createMatrix(corpus: Array[(String, Seq[String])],
+                    keywords: Array[String],
+                    outputFilename: String): Unit = {
 
-    val documents: Array[(String, Seq[String])] =
-      classCorpus.map(t => (t._1, t._2.split(" ").toSeq)).collect()
+    // 1. corpus의 첫번째가 class, 나머지는 tweet content
 
-    val keyword: Array[String] = keywords.collect()
 
-    val writer = new PrintWriter(new File("test_matrix_entropy.csv"))
-    writer.write(keyword.mkString(",") + ",class\n")
+    // 2. Matrix의 첫번째 Row는 각 키워드들
+    val writer = new PrintWriter(new File(outputFilename))
+    writer.write(keywords.mkString(",") + ",class\n")
 
-    for (doc <- documents) {
-      for (key <- keyword) {
+    for (doc <- corpus) {
+      for (key <- keywords) {
         val filtered = doc._2.filter(_.equals(key))
         if (!filtered.isEmpty) writer.write("1,")
         else writer.write("0,")
@@ -275,75 +194,6 @@ class FeatureExtractor(sc: SparkContext) {
     }
 
     writer.close()
-
-  }
-
-  def apriori(inputPath: String,
-              maxIterations: Int,
-              minSup: Int,
-              outputPath: String) = {
-
-    val documentIdDelimiter = "\t"
-    val documentItemDelimiter = " "
-
-    var k = 1
-    var hasConverged = false
-
-    // Step1
-    val documents = sc.textFile(inputPath).map { line =>
-      val lineIndex = line.indexOf(documentIdDelimiter)
-      val key = line.substring(0, lineIndex)
-      val value = line.substring(lineIndex + 1, line.length)
-      value.split(documentItemDelimiter).distinct.mkString(documentItemDelimiter)
-    }
-
-    var previousRules: Broadcast[Array[String]] = null
-
-    def findCandidates(documents: RDD[String],
-                       prevRules: Broadcast[Array[String]],
-                       k: Int,
-                       minSup: Int): RDD[String] = {
-      documents.flatMap { items =>
-        var cItems1: Array[Int] = items.split(documentItemDelimiter).map(_.toInt).sorted.toArray
-        var combGen1 = new CombinationGenerator()
-        var combGen2 = new CombinationGenerator()
-
-        var candidates = scala.collection.mutable.ListBuffer.empty[(String, Int)]
-        combGen1.reset(k, cItems1)
-
-        while (combGen1.hasNext()) {
-          var cItems2 = combGen1.next()
-          var valid = true
-          if (k > 1) {
-            combGen2.reset(k-1, cItems2)
-            while (combGen2.hasNext && valid) {
-              valid = prevRules.value.contains(java.util.Arrays.toString(combGen2.next()))
-            }
-          }
-          if (valid) {
-            candidates += Tuple2(java.util.Arrays.toString(cItems2), 1)
-          }
-        }
-        candidates
-      }.reduceByKey(_+_).filter(_._2 >= minSup).map { case (itemset, _) => itemset }
-    }
-
-    while(k < maxIterations && !hasConverged) {
-      printf("Starting Iteration %s\n", k)
-      // Step2
-      var supportedRules = findCandidates(documents, previousRules, k, minSup)
-      var tempPrevRules = supportedRules.collect()
-      var ruleCount = tempPrevRules.length
-      if (0 == ruleCount) {
-        hasConverged = true
-      } else {
-        previousRules = sc.broadcast(tempPrevRules)
-        supportedRules.coalesce(1).saveAsTextFile(outputPath + "/" + k)
-        k += 1
-      }
-    }
-
-    printf("Converged at Iteration %s\n", k)
 
   }
 
