@@ -99,4 +99,22 @@ class TestDriver(sc: SparkContext,
 
   }
 
+  def createTestMatrix(inputPath: String,
+                       outputPath: String,
+                       keywordPath: String) = {
+
+    // 1. 형태소 분석기를 통하여 기존의 문서를 다시 생성.
+    morpho.makeRDDKeywordInTweet(inputPath, "input/data_morpho.txt")
+    val corpus: RDD[Seq[String]] = sc.textFile("input/data_morpho.txt").map(_.split(",").toSeq)
+    val classOfTweet: RDD[String] = sc.textFile(inputPath).map(_.split(",")(0))
+    val classCorpus: Array[(String, Seq[String])] =
+      classOfTweet.collect().zip(corpus.collect())
+
+    // 2. 키워드 목록 생성
+    val keywords: Array[String] = sc.textFile(keywordPath).map(_.split(",")(0)).collect()
+
+    // 3. Matrix 생성.
+    featureExtractor.createMatrix(classCorpus, keywords, outputPath)
+  }
+
 }
