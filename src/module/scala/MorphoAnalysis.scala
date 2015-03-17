@@ -1,12 +1,14 @@
 import java.io.{File, PrintWriter}
 import java.sql.{ResultSet, DriverManager}
+import java.sql.Date
 
-import breeze.storage.Storage
-import org.apache.spark.SparkConf
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
-import scala.collection.mutable
 import scala.collection.mutable._
 import scala.io.Source._
 import scala.collection.JavaConverters._
@@ -22,7 +24,7 @@ class MorphoAnalysis(sc:SparkContext) {
   private val _regexID = "@[a-zA-Z0-9_:]*"
   private val _mecab = new MeCab()
   private val _sc = sc
-  private val _db = "jdbc:mysql://218.54.47.24:3306/tweet?user=root&password=tkfkdgo1_"
+  private val _db = "jdbc:mysql://218.54.47.24:3306/tweetdata?user=tweetdatauser&password=tweetdatauser"
 
   def writeFileForTextPerLine(path:String, textPerLine:String): Unit ={
     val writer = new PrintWriter(new File(path))
@@ -48,6 +50,44 @@ class MorphoAnalysis(sc:SparkContext) {
     writer.close()
     source.close()
   }
+  def inputRowTweetDataFromJson(jsonPath :String): Unit = {
+    classOf[com.mysql.jdbc.Driver]
+    val source = fromFile(jsonPath).getLines()
+    val conn = DriverManager.getConnection(_db)
+    val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
+    val tweetParser = new TweetJsonParser
+
+    // TEST CODE
+//    val writer = new PrintWriter(new File("output/jsonOutput.txt"))
+
+    try{
+      for(line <- source){
+        // Tweeter JSON에서 id, time, text를 가져온다.
+        // time 에서 얻어오는 날짜 정보는 미국 현지 시간을 기준으로 측정된 값. ( EEE, d MMM HH:mm:ss Z yyyy 포멧의 String)
+        // timestamp값은 한국 현지 시간을 기준으로 측정된 값. (Long 값의 String)
+        val Array(id:String, time:String, timestamp:String, text:String) = tweetParser.parserTweetRowData(line).split("\t")
+        val wordList = ngram2(2, _mecab.parseWord(text.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+        val documentStr = wordList.mkString(",")
+        val prep = conn.prepareStatement("INSERT INTO RawTable (tweetid, createdAt, text, document) VALUES (?, ?, ?, ?)")
+
+//        println(List(id.toLong, getDate(timestamp.toLong), text, documentStr).mkString("\t"))
+
+        prep.setLong(1, id.toLong)
+        prep.setDate(2, getDate(timestamp.toLong))
+        prep.setString(3, text)
+        prep.setString(4, documentStr)
+        prep.executeUpdate
+
+//        writer.write(List(id, getTime(timestamp.toLong), text,documentStr).mkString("\t"))
+//        writer.write("\n")
+      }
+    }
+    finally{
+//      writer.close()
+      conn.close()
+    }
+
+  }
   // domain = > 야구(1), 축구(2), 건강(3)
   def makeRDDKeywordInTweet(domain : Int): Unit = {
     val tweetRDD = getTweetDataFrom(domain)
@@ -59,6 +99,7 @@ class MorphoAnalysis(sc:SparkContext) {
         val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
 
         val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
+
         prep.setInt(1, tweet._1)
         prep.setString(2, wordList.mkString(","))
         prep.executeUpdate
@@ -165,5 +206,11 @@ class MorphoAnalysis(sc:SparkContext) {
     }
     newWords ++= originalWords
     newWords.toList
+  }
+
+  def getDate(timestamp:Long): java.sql.Date ={
+    val ts = new Timestamp(timestamp)
+    val date = new java.sql.Date(ts.getTime())
+    date
   }
 }
