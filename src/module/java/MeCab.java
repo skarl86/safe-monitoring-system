@@ -3,17 +3,12 @@
  */
 // JAVA SDK
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.io.IOException;
 import java.util.*;
-import java.sql.*;
 
 
 // MECAB SDK
-import org.chasen.mecab.Node;
 import org.chasen.mecab.Tagger;
-import scala.util.parsing.combinator.testing.Str;
 
 public class MeCab {
     static{
