@@ -65,6 +65,9 @@ class MorphoAnalysis(sc:SparkContext) {
 
       }
     }
+    finally {
+      conn.close
+    }
   }
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit = {
     val tweetRDD = getTweetDataFrom(inputPath)
@@ -79,7 +82,7 @@ class MorphoAnalysis(sc:SparkContext) {
     writer.close()
 
   }
-
+  /*
   def insertKeywordToDB(tweetID:Int, words:List[String] ): Unit ={
     classOf[com.mysql.jdbc.Driver]
     val conn = DriverManager.getConnection(_db)
@@ -95,6 +98,7 @@ class MorphoAnalysis(sc:SparkContext) {
       conn.close
     }
   }
+  */
   def getTweetDataFrom(domain : Int): RDD[(Int, String)] = {
 
     classOf[com.mysql.jdbc.Driver]
