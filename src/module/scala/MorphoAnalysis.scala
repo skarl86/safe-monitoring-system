@@ -65,9 +65,6 @@ class MorphoAnalysis(sc:SparkContext) {
 
       }
     }
-    finally {
-      conn.close
-    }
   }
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit = {
     val tweetRDD = getTweetDataFrom(inputPath)
@@ -84,7 +81,19 @@ class MorphoAnalysis(sc:SparkContext) {
   }
 
   def insertKeywordToDB(tweetID:Int, words:List[String] ): Unit ={
+    classOf[com.mysql.jdbc.Driver]
+    val conn = DriverManager.getConnection(_db)
+    val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
 
+    try {
+      val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
+      prep.setInt(1, tweetID)
+      prep.setString(2, words.mkString(","))
+      prep.executeUpdate
+    }
+    finally {
+      conn.close
+    }
   }
   def getTweetDataFrom(domain : Int): RDD[(Int, String)] = {
 
@@ -113,7 +122,7 @@ class MorphoAnalysis(sc:SparkContext) {
     _sc.parallelize(tweetData.toList)
   }
   def getTweetDataFrom(path : String): RDD[String] = {
-    _sc.textFile(path).map(_.split("\t")(5))
+    _sc.textFile(path).map(_.split("\t")(1))
   }
 
   def ngram2(n: Int, words: List[String]): List[String] = {

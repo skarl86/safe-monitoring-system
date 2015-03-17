@@ -3,6 +3,7 @@ import java.sql.DriverManager
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.feature.HashingTF
 import org.apache.spark.mllib.feature.IDF
 import org.apache.spark.mllib.linalg.Vector
@@ -58,6 +59,25 @@ class FeatureExtractor(sc: SparkContext) {
     val normalKeywordCount = keywordCount.map(t => (t._1, (t._2 - mean) / range))
 
     normalKeywordCount.sortBy(_._2, desending)
+
+  }
+
+  def tfidfByDocument(corpus: RDD[Seq[String]]): RDD[Seq[(String, Double)]] = {
+
+    val hashingTF = new HashingTF()
+    val tf: RDD[Vector] = hashingTF.transform(corpus)
+
+    tf.cache()
+    val idf = new IDF().fit(tf)
+    val tfidf: RDD[Vector] = idf.transform(tf)
+
+    // 1. 각 키워드 Count
+    val keywordCount: RDD[(String, Int)] = corpus.flatMap(_.map((_, 1))).reduceByKey(_ + _)
+
+    // 2. 각 키워드별 TF-IDF 매칭 작업.
+    val keywordIndex = corpus.map(seq => seq.map(str => (str, hashingTF.indexOf(str))))
+
+    keywordIndex.zip(tfidf).map(t1 => t1._1.map(t2 => (t2._1, t1._2.toArray(t2._2))))
 
   }
 
@@ -117,11 +137,16 @@ class FeatureExtractor(sc: SparkContext) {
     var reduceKeyword: RDD[(String, Double)] = null
     // 3. 추후 Average말고 다른 Method를 추가 가능.
     method match {
-      case "average" =>
+      case "average" => {
         reduceKeyword =
           keywordTfidf.mapValues((_, 1))
-          .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
-          .mapValues(x => x._1 / x._2)
+            .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2))
+            .mapValues(x => x._1 / x._2)
+      }
+
+      case "std" => {
+
+      }
     }
 
     // 4. Sort 방법, asending / descending
@@ -250,6 +275,75 @@ class FeatureExtractor(sc: SparkContext) {
     }
 
     writer.close()
+
+  }
+
+  def apriori(inputPath: String,
+              maxIterations: Int,
+              minSup: Int,
+              outputPath: String) = {
+
+    val documentIdDelimiter = "\t"
+    val documentItemDelimiter = " "
+
+    var k = 1
+    var hasConverged = false
+
+    // Step1
+    val documents = sc.textFile(inputPath).map { line =>
+      val lineIndex = line.indexOf(documentIdDelimiter)
+      val key = line.substring(0, lineIndex)
+      val value = line.substring(lineIndex + 1, line.length)
+      value.split(documentItemDelimiter).distinct.mkString(documentItemDelimiter)
+    }
+
+    var previousRules: Broadcast[Array[String]] = null
+
+    def findCandidates(documents: RDD[String],
+                       prevRules: Broadcast[Array[String]],
+                       k: Int,
+                       minSup: Int): RDD[String] = {
+      documents.flatMap { items =>
+        var cItems1: Array[Int] = items.split(documentItemDelimiter).map(_.toInt).sorted.toArray
+        var combGen1 = new CombinationGenerator()
+        var combGen2 = new CombinationGenerator()
+
+        var candidates = scala.collection.mutable.ListBuffer.empty[(String, Int)]
+        combGen1.reset(k, cItems1)
+
+        while (combGen1.hasNext()) {
+          var cItems2 = combGen1.next()
+          var valid = true
+          if (k > 1) {
+            combGen2.reset(k-1, cItems2)
+            while (combGen2.hasNext && valid) {
+              valid = prevRules.value.contains(java.util.Arrays.toString(combGen2.next()))
+            }
+          }
+          if (valid) {
+            candidates += Tuple2(java.util.Arrays.toString(cItems2), 1)
+          }
+        }
+        candidates
+      }.reduceByKey(_+_).filter(_._2 >= minSup).map { case (itemset, _) => itemset }
+    }
+
+    while(k < maxIterations && !hasConverged) {
+      printf("Starting Iteration %s\n", k)
+      // Step2
+      var supportedRules = findCandidates(documents, previousRules, k, minSup)
+      var tempPrevRules = supportedRules.collect()
+      var ruleCount = tempPrevRules.length
+      if (0 == ruleCount) {
+        hasConverged = true
+      } else {
+        previousRules = sc.broadcast(tempPrevRules)
+        supportedRules.coalesce(1).saveAsTextFile(outputPath + "/" + k)
+        k += 1
+      }
+    }
+
+    printf("Converged at Iteration %s\n", k)
 
   }
 

@@ -13,34 +13,18 @@ object Application {
 
     val conf = new SparkConf().setAppName("Safe-Monitoring-System").setMaster("local[*]")
     val sc = new SparkContext(conf)
-//
+
+    // 1. 기본적인 Class 설정
     val morpho = new MorphoAnalysis(sc)
     val featureExtractor = new FeatureExtractor(sc)
-//
-    morpho.makeRDDKeywordInTweet("./input/data.txt","./output/output.txt")
+    val testDriver = new TestDriver(sc, morpho, featureExtractor)
 
-    // TFIDF corpus
-//    val corpus: RDD[Seq[String]] = sc.textFile("output/output.txt").map(_.split(",").toSeq)
-    // Entropy corpus
-//    val corpus: RDD[(String, String)] = sc.textFile("input/data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
-//    val keywords: RDD[String] = sc.textFile("input/trainingset_keyword_1000.txt").map(_.split(",")(0))
-    // Entropy Matrix
-    val corpus: RDD[(String, String)] = sc.textFile("input/test_data.txt").map(_.split("\t")).map(list => (list(0), list(1)))
-    val keywords: RDD[String] = sc.textFile("input/entropy_keyword.txt").map(_.split(",")(0))
+    // 2. Matrix 생성 모듈
+    // 2-1. keyword list가 존재하지 않을 경우 (training_set)
+    testDriver.run("input/data.txt", "output_entropy", null, 1000, "termFrequency")
+    // 2-2. keyword list 가 존재할 경우 (test_set)
+//    testDriver.run("input/data.txt", "output_entropy", "input/trainingset_keyword_1000.txt", "termFrequency")
+//    testDriver.runTfidf("input/data.txt", null, 1000)
 
-////    corpus.foreach(println)
-//
-//    val keywordTfidf = featureExtractor.tfidf(corpus,"average","tfidf",false)
-//    keywordTfidf.coalesce(1).saveAsTextFile("output_spark")
-
-//    val keywordTF = featureExtractor.termFrequency(corpus, false)
-//    keywordTF.coalesce(1).saveAsTextFile("output_tf")
-
-//    corpus.filter(_._2.contains("설정")).foreach(println)
-
-//    val entropy = featureExtractor.entropy(corpus, keywords, false, true)
-//    entropy.coalesce(1).saveAsTextFile("output_entropy")
-
-    featureExtractor.entropyMatrix(corpus, keywords)
   }
 }
