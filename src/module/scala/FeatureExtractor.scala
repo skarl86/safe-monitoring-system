@@ -112,35 +112,35 @@ class FeatureExtractor(sc: SparkContext) {
 
   }
 
-  def entropyOfKeywords(classCorpus: RDD[(String, Seq[String])],
-              keywords: RDD[String],
+  def entropyOfKeywords(classCorpus: Array[(String, Seq[String])],
+              keywords: Array[String],
               sort: Boolean = false): RDD[(String, Double)] = {
 
     val classCorpusString = classCorpus.map(t => (t._1, t._2.mkString(" ")))
     val COLLECTION_VALUE = 0.0000000000000001
-    val TWEET_TOTAL_COUNT = classCorpusString.count()
+    val TWEET_TOTAL_COUNT = classCorpusString.length
 
     var keywordInfo = List(("start", (.0, .0, .0), (.0, .0, .0)))
 
-    val yesTweetCount = classCorpusString.filter(x => x._1.equals("p")).count() + COLLECTION_VALUE
-    val noTweetCount = classCorpusString.filter(x => x._1.equals("n")).count() + COLLECTION_VALUE
+    val yesTweetCount = classCorpusString.filter(x => x._1.equals("p")).length + COLLECTION_VALUE
+    val noTweetCount = classCorpusString.filter(x => x._1.equals("n")).length + COLLECTION_VALUE
     val totalTweetCount = yesTweetCount + noTweetCount
 
-    for (keyword <- keywords.collect()) {
+    for (keyword <- keywords) {
 
       val yesFilteredTweet = classCorpusString.filter(_._2.contains(keyword))
       val noFilteredTweet =classCorpusString.filter(t => !(t._2.contains(keyword)))
 
-      val yesTotalCount = yesFilteredTweet.count()
+      val yesTotalCount = yesFilteredTweet.length
       val noTotalCount = TWEET_TOTAL_COUNT - yesTotalCount
 
       val yesSide = yesFilteredTweet.map(list => (yesTotalCount, keyword, list._1, list._2))
       val noSide = noFilteredTweet.map(list => (noTotalCount, keyword, list._1, list._2))
 
-      val yesYesCount = yesSide.filter(list => list._3.equals("p")).count()
+      val yesYesCount = yesSide.filter(list => list._3.equals("p")).length
       val yesNoCount = yesTotalCount - yesYesCount
 
-      val noYesCount = noSide.filter(list => list._3.equals("p")).count()
+      val noYesCount = noSide.filter(list => list._3.equals("p")).length
       val noNoCount = noTotalCount - noYesCount
 
       keywordInfo = keywordInfo :+ (keyword, (yesTotalCount.toDouble+COLLECTION_VALUE,

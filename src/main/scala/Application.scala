@@ -20,9 +20,14 @@ object Application {
     val testDriver = new TestDriver(sc, morpho, featureExtractor)
 
     // 2. Matrix 생성 모듈
-    testDriver.run("input/data.txt", "matrix.csv", null, "keyword/keywords.txt", 1000, 200, "tf")
-    // 2-2. keyword list 가 존재할 경우 (test_set)
-//    testDriver.run("input/data.txt", "matrix.csv", "keyword/keywords.txt", null, 0, 0, "tf")
+    // 2-1. Training Matrix 생성.
+    testDriver.createTrainingMatrix("input/data.txt",
+      "matrix_training.csv",
+      "keyword/keywords_tf.txt",
+      "keyword/keywords_final.txt",
+      1000,
+      200,
+      "tf")
 
   }
 }
