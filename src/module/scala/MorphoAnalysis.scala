@@ -51,9 +51,22 @@ class MorphoAnalysis(sc:SparkContext) {
   // domain = > 야구(1), 축구(2), 건강(3)
   def makeRDDKeywordInTweet(domain : Int): Unit = {
     val tweetRDD = getTweetDataFrom(domain)
-    for (tweet <- tweetRDD.collect()) {
-      val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
-      insertKeywordToDB(tweet._1,wordList)
+    classOf[com.mysql.jdbc.Driver]
+    val conn = DriverManager.getConnection(_db)
+    val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
+    try {
+      for (tweet <- tweetRDD.collect()) {
+        val wordList = ngram2(2, _mecab.parseWord(tweet._2.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+
+        val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
+        prep.setInt(1, tweet._1)
+        prep.setString(2, wordList.mkString(","))
+        prep.executeUpdate
+
+      }
+    }
+    finally {
+      conn.close
     }
   }
   def makeRDDKeywordInTweet(inputPath :String, outputPath: String): Unit = {
@@ -71,19 +84,7 @@ class MorphoAnalysis(sc:SparkContext) {
   }
 
   def insertKeywordToDB(tweetID:Int, words:List[String] ): Unit ={
-    classOf[com.mysql.jdbc.Driver]
-    val conn = DriverManager.getConnection(_db)
-    val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
 
-    try {
-      val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
-      prep.setInt(1, tweetID)
-      prep.setString(2, words.mkString(","))
-      prep.executeUpdate
-    }
-    finally {
-      conn.close
-    }
   }
   def getTweetDataFrom(domain : Int): RDD[(Int, String)] = {
 
@@ -112,7 +113,7 @@ class MorphoAnalysis(sc:SparkContext) {
     _sc.parallelize(tweetData.toList)
   }
   def getTweetDataFrom(path : String): RDD[String] = {
-    _sc.textFile(path).map(_.split("\t")(1))
+    _sc.textFile(path).map(_.split("\t")(5))
   }
 
   def ngram2(n: Int, words: List[String]): List[String] = {
