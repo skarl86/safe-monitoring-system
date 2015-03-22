@@ -1,4 +1,4 @@
-import java.io.{File, PrintWriter}
+import java.io.{IOException, File, PrintWriter}
 import java.sql.{ResultSet, DriverManager}
 import java.sql.Date
 
@@ -6,6 +6,7 @@ import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+import java.sql.PreparedStatement
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -50,6 +51,80 @@ class MorphoAnalysis(sc:SparkContext) {
     writer.close()
     source.close()
   }
+  def inputRowTweetDataFromPreprocessedData(tweetRawDirPath:String): Unit ={
+    classOf[com.mysql.jdbc.Driver]
+    val dir: File = new File(tweetRawDirPath)
+    val tweetParser = new TweetJsonParser
+    val conn = DriverManager.getConnection(_db)
+    val statement = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE)
+    val fileList: Array[File] = dir.listFiles
+
+    try { {
+      var i: Int = 0
+      var fileCount: Long = 0
+      var rowCount: Long = 0
+
+      while (i < fileList.length) {
+        {
+          val file: File = fileList(i)
+
+          if (file.isFile) {
+            if (file.getName.startsWith("pre") && (file.length > 0L)) {
+              val lines = fromFile(file).getLines()
+              fileCount += 1
+              for(line <- lines){
+                val Array(id:String, lat:String, long:String, time:String, timestamp:String, text:String) = line.split("\t")
+                val wordList = ngram2(2, _mecab.parseWord(text.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
+                // 도구 프로그램에서 예외처리가 필요함.
+                val documentStr = "," + wordList.mkString(",") + ","
+                var prep:PreparedStatement = null
+
+                rowCount += 1
+
+                lat match{
+                  case "None" =>{
+//                    println(List(rowCount,fileCount).mkString(" / ") + ": Not Have GEO")
+                    val query = "INSERT INTO RawTable (tweetid, createdAt, text, document) VALUES (?, ?, ?, ?)"
+                    prep = conn.prepareStatement(query)
+                  }
+                  case lat : String =>{
+//                    println(List(rowCount,fileCount).mkString(" / ") + ": Have GEO : (" + List(id, lat, long).mkString(",") + ")")
+                    val query = "INSERT INTO RawTable (tweetid, createdAt, text, document, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)"
+                    prep = conn.prepareStatement(query)
+                    prep.setDouble(5, lat.toDouble)
+                    prep.setDouble(6, long.toDouble)
+
+                  }
+                }
+                prep.setLong(1, id.toLong)
+                prep.setDate(2, getDate(timestamp.toLong))
+                prep.setString(3, text)
+                prep.setString(4, documentStr)
+
+                prep.executeUpdate
+              }
+            }
+          }
+          else if (file.isDirectory) {
+            //            subDirList(file.getCanonicalPath.toString)
+          }
+        }
+        println("Input Complete(" + (i+1) + "/" + fileList.length + ")")
+        ({
+          i += 1; i - 1
+        })
+      }
+    }
+    }
+    catch {
+      case e: IOException => {
+      }
+    }
+    finally {
+      conn.close()
+    }
+  }
+
   def inputRowTweetDataFromJson(jsonPath :String): Unit = {
     classOf[com.mysql.jdbc.Driver]
     val source = fromFile(jsonPath).getLines()
@@ -65,19 +140,33 @@ class MorphoAnalysis(sc:SparkContext) {
         // Tweeter JSON에서 id, time, text를 가져온다.
         // time 에서 얻어오는 날짜 정보는 미국 현지 시간을 기준으로 측정된 값. ( EEE, d MMM HH:mm:ss Z yyyy 포멧의 String)
         // timestamp값은 한국 현지 시간을 기준으로 측정된 값. (Long 값의 String)
-        val Array(id:String, time:String, timestamp:String, text:String) = tweetParser.parserTweetRowData(line).split("\t")
+        val Array(id:String, lat:String, long:String, time:String, timestamp:String, text:String) = tweetParser.parserTweetRowData(line).split("\t")
         val wordList = ngram2(2, _mecab.parseWord(text.replaceAll(_regexURL, "").replaceAll(_regexID, "")).asScala.toList)
-        val documentStr = wordList.mkString(",")
-        val prep = conn.prepareStatement("INSERT INTO RawTable (tweetid, createdAt, text, document) VALUES (?, ?, ?, ?)")
+        // 도구 프로그램에서 예외처리가 필요함.
+        val documentStr = "," + wordList.mkString(",") + ","
+        var prep:PreparedStatement = null
 
-//        println(List(id.toLong, getDate(timestamp.toLong), text, documentStr).mkString("\t"))
+        lat match{
+          case lat : String =>{
+            val query = "INSERT INTO RawTable (tweetid, createdAt, text, document, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)"
+            println(query)
+            prep = conn.prepareStatement(query)
+            prep.setDouble(5, lat.toDouble)
+            prep.setDouble(6, long.toDouble)
 
+          }
+          case null =>{
+            val query = "INSERT INTO RawTable (tweetid, createdAt, text, document) VALUES (?, ?, ?, ?)"
+            prep = conn.prepareStatement(query)
+          }
+        }
         prep.setLong(1, id.toLong)
         prep.setDate(2, getDate(timestamp.toLong))
         prep.setString(3, text)
         prep.setString(4, documentStr)
-        prep.executeUpdate
 
+        prep.executeUpdate
+//        println(List(id.toLong, getDate(timestamp.toLong), text, documentStr).mkString("\t"))
 //        writer.write(List(id, getTime(timestamp.toLong), text,documentStr).mkString("\t"))
 //        writer.write("\n")
       }
@@ -101,7 +190,7 @@ class MorphoAnalysis(sc:SparkContext) {
         val prep = conn.prepareStatement("INSERT INTO keyword (tweetid, keyword) VALUES (?, ?) ")
 
         prep.setInt(1, tweet._1)
-        prep.setString(2, wordList.mkString(","))
+        prep.setString(2, "," + wordList.mkString(",") + ",")
         prep.executeUpdate
 
       }
@@ -171,12 +260,18 @@ class MorphoAnalysis(sc:SparkContext) {
   }
 
   def ngram2(n: Int, words: List[String]): List[String] = {
-    val ngrams = (for( i <- 1 to n) yield words.sliding(i).map(p => p.toList)).flatMap(x => x)
-    var newWords = new ListBuffer[String]()
-    for(cardinate <- ngrams){
-      newWords += (cardinate.mkString)
+    if(words.size == 1){
+      words
+    }else{
+      val ngrams = (for( i <- 1 to n) yield words.sliding(i).map(p => p.toList)).flatMap(x => x)
+      var newWords = new ListBuffer[String]()
+      for(cardinate <- ngrams){
+        newWords += (cardinate.mkString)
+      }
+      newWords.toList
     }
-    newWords.toList
+
+
   }
   def ngram(n : Int, words: List[String]): List[String] = {
     val categoryKeywordsRDD = _sc.textFile("./dic/keywords.txt").map(_.split(","))
