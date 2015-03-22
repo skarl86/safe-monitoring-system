@@ -25,6 +25,7 @@ class MorphoAnalysis(sc:SparkContext) {
   private val _regexID = "@[a-zA-Z0-9_:]*"
   private val _mecab = new MeCab()
   private val _sc = sc
+//  private val _db = "jdbc:mysql://localhost:8889/tweetdata?user=root&password=Root0p9o"
   private val _db = "jdbc:mysql://218.54.47.24:3306/tweetdata?user=tweetdatauser&password=tweetdatauser"
 
   def writeFileForTextPerLine(path:String, textPerLine:String): Unit ={
